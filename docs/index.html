@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camper Power Dashboard – Install &amp; Setup</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --card: #f4f6f8; --line: #d5d9de;
+    --accent: #0a6cff; --accent-fg: #fff; --ok: #1a8a3a; --err: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171a; --fg: #e8eaed; --muted: #9aa0a6; --card: #1e2226; --line: #343a40;
+      --accent: #4d9aff; --accent-fg: #0b1220; --ok: #5dd47c; --err: #ff7b7b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 0 0 8px; }
+  p.sub { margin: 0 0 24px; color: var(--muted); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+            padding: 18px; margin-bottom: 18px; }
+  .btn { background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 8px;
+         padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; margin: 4px 8px 4px 0; }
+  .btn.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 10px 0 2px; }
+  input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+         background: var(--bg); color: var(--fg); font: 14px ui-monospace, Menlo, Consolas, monospace; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  .small { font-size: .85rem; color: var(--muted); }
+  #status { font-weight: 600; margin: 8px 0; }
+  #status.ok { color: var(--ok); } #status.err { color: var(--err); }
+  #seen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  #seen button { border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+         border-radius: 999px; padding: 4px 12px; font: 13px ui-monospace, Menlo, Consolas, monospace; cursor: pointer; }
+  #seen button:hover { border-color: var(--accent); }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+        max-height: 140px; overflow: auto; font-size: 12px; margin: 8px 0 0; white-space: pre-wrap; }
+  #live { font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); word-break: break-word; }
+  #warn { display: none; background: #fff3cd; color: #5c4400; border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Camper Power Dashboard</h1>
+  <p class="sub">Victron MPPT + SmartShunt + Ruuvi tags on an ESP32 2.8" display</p>
+
+  <div id="warn">This page needs <b>Chrome or Edge on a computer</b> (or Chrome on Android with a USB OTG cable). Safari and Firefox can’t talk to USB devices.</div>
+
+  <section>
+    <h2>1. Install the firmware</h2>
+    <p class="small">Plug the ESP32 display into your computer with a USB <em>data</em> cable, click a button, pick the serial port, and wait for it to finish. Your saved settings are kept when you update.</p>
+    <esp-web-install-button manifest="manifest-cyd.json">
+      <button slot="activate" class="btn">Install (standard display)</button>
+      <span slot="unsupported">Your browser doesn’t support installing from this page. Use Chrome or Edge on a computer.</span>
+      <span slot="not-allowed">This page must be opened over https.</span>
+    </esp-web-install-button>
+    <esp-web-install-button manifest="manifest-cyd_inverted.json">
+      <button slot="activate" class="btn secondary">Install (colours look wrong? use this)</button>
+    </esp-web-install-button>
+    <p class="small">Use the second button only if the first install shows inverted colours (white background, blue looks orange, etc.).</p>
+  </section>
+
+  <section>
+    <h2>2. Enter your device settings</h2>
+    <p class="small">Click Connect, choose the same USB port, and the page will list the Victron and Ruuvi devices the display can hear. Click one to fill in its address. Keys stay on your device and in this browser tab; nothing is uploaded.</p>
+    <button class="btn" id="connect">Connect</button>
+    <div id="status">Not connected.</div>
+    <div class="small">Nearby devices (click to use):</div>
+    <div id="seen"><span class="small">none yet</span></div>
+
+    <label>Solar charger (MPPT) – address</label>
+    <input type="text" id="solar-mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+    <label>Solar charger – encryption key (32 characters)</label>
+    <input type="text" id="solar-key" placeholder="" autocomplete="off" spellcheck="false">
+
+    <label>Battery monitor (SmartShunt / BMV) – address</label>
+    <input type="text" id="shunt-mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+    <label>Battery monitor – encryption key (32 characters)</label>
+    <input type="text" id="shunt-key" placeholder="" autocomplete="off" spellcheck="false">
+
+    <p class="small">Find the address and key in VictronConnect: open the device › Settings (gear) › Product info › turn on <b>Instant readout via Bluetooth</b> › <b>Show</b> under Encryption data.</p>
+
+    <div class="row">
+      <div><label>Ruuvi tag 1 – address</label><input type="text" id="tag1-mac" placeholder="aa:bb:cc:dd:ee:ff" spellcheck="false"></div>
+      <div><label>Name (max 10 chars)</label><input type="text" id="tag1-name" value="FRIDGE" maxlength="10"></div>
+      <div><label>Ruuvi tag 2 – address</label><input type="text" id="tag2-mac" placeholder="aa:bb:cc:dd:ee:ff" spellcheck="false"></div>
+      <div><label>Name</label><input type="text" id="tag2-name" value="BATTERY" maxlength="10"></div>
+      <div><label>Ruuvi tag 3 – address</label><input type="text" id="tag3-mac" placeholder="aa:bb:cc:dd:ee:ff" spellcheck="false"></div>
+      <div><label>Name</label><input type="text" id="tag3-name" value="OUTSIDE" maxlength="10"></div>
+    </div>
+    <p class="small">Leave a tag’s address empty to disable it. Ruuvi addresses are shown in the Ruuvi Station app.</p>
+
+    <button class="btn" id="save" disabled>Save to display</button>
+    <div id="live"></div>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
+const KEY_RE = /^[0-9a-fA-F]{32}$/;
+let port = null, writer = null;
+const seen = new Map();   // mac -> {kind, type}
+
+if (!('serial' in navigator)) $('warn').style.display = 'block';
+
+function setStatus(text, cls) {
+  const s = $('status');
+  s.textContent = text;
+  s.className = cls || '';
+}
+function log(t) {
+  const l = $('log');
+  l.textContent += t + '\n';
+  l.scrollTop = l.scrollHeight;
+}
+async function send(cmd) {
+  await writer.write(cmd + '\n');
+  await sleep(250);
+}
+
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    const enc = new TextEncoderStream();
+    enc.readable.pipeTo(port.writable);
+    writer = enc.writable.getWriter();
+    readLoop();
+    setStatus('Connected. Waiting for the display to start…');
+    await sleep(3000);          // opening the port resets most ESP32 boards
+    await send('show');
+    await send('scan');
+    setStatus('Connected.', 'ok');
+    $('save').disabled = false;
+    $('connect').disabled = true;
+  } catch (e) {
+    setStatus('Could not connect: ' + e.message, 'err');
+  }
+}
+
+async function readLoop() {
+  const dec = new TextDecoderStream();
+  port.readable.pipeTo(dec.writable);
+  const reader = dec.readable.getReader();
+  let buf = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        handleLine(buf.slice(0, i).trim());
+        buf = buf.slice(i + 1);
+      }
+    }
+  } catch (e) { /* port closed */ }
+  setStatus('Disconnected.', 'err');
+  $('save').disabled = true;
+  $('connect').disabled = false;
+}
+
+function handleLine(l) {
+  if (!l) return;
+  const p = l.split(/\s+/);
+  if (p[0] === 'SEEN') return addSeen(p[1], p[2], p[3]);
+  if (p[0] === 'DATA') { $('live').textContent = 'Live: ' + l.slice(5); return; }
+  if (p[0] === 'CFG')  return applyCfg(p);
+  log(l);
+}
+
+function applyCfg(p) {
+  const val = v => (v === '-' ? '' : v);
+  if (p[1] === 'solar' || p[1] === 'shunt') {
+    $(p[1] + '-mac').value = val(p[2]);
+    $(p[1] + '-key').placeholder = p[3] === 'yes' ? 'Saved on display – leave blank to keep' : '';
+  } else if (p[1] === 'tag') {
+    $('tag' + p[2] + '-mac').value = val(p[3]);
+    if (p[4]) $('tag' + p[2] + '-name').value = p[4];
+  }
+}
+
+const VICTRON_TYPES = {
+  '01': 'MPPT solar charger', '02': 'Battery monitor', '03': 'Inverter', '04': 'DC-DC converter',
+  '05': 'Smart lithium', '08': 'AC charger', '09': 'Battery protect', '0a': 'Lynx BMS',
+  '0b': 'Multi RS', '0c': 'VE.Bus', '0d': 'DC energy meter'
+};
+
+function addSeen(kind, mac, type) {
+  if (seen.has(mac)) return;
+  seen.set(mac, { kind, type });
+  renderSeen();
+}
+function renderSeen() {
+  const box = $('seen');
+  box.innerHTML = '';
+  if (!seen.size) { box.innerHTML = '<span class="small">none yet</span>'; return; }
+  for (const [mac, d] of seen) {
+    const b = document.createElement('button');
+    const label = d.kind === 'ruuvi' ? 'Ruuvi' : ('Victron ' + (VICTRON_TYPES[d.type] || 'device'));
+    b.textContent = label + ' · ' + mac;
+    b.onclick = () => useSeen(mac, d);
+    box.appendChild(b);
+  }
+}
+function useSeen(mac, d) {
+  if (d.kind === 'victron') {
+    if (d.type === '01') $('solar-mac').value = mac;
+    else if (d.type === '02') $('shunt-mac').value = mac;
+    else alert('This dashboard only reads MPPT solar chargers and battery monitors.');
+  } else {
+    for (let i = 1; i <= 3; i++) {
+      if (!$('tag' + i + '-mac').value) { $('tag' + i + '-mac').value = mac; return; }
+    }
+    alert('All three tag slots are already filled.');
+  }
+}
+
+async function save() {
+  const cmds = [];
+  for (const k of ['solar', 'shunt']) {
+    const mac = $(k + '-mac').value.trim().toLowerCase();
+    const key = $(k + '-key').value.trim();
+    if (mac) {
+      if (!MAC_RE.test(mac)) return alert('The ' + k + ' address must look like aa:bb:cc:dd:ee:ff');
+      if (key && !KEY_RE.test(key)) return alert('The ' + k + ' key must be exactly 32 letters/digits (0-9, a-f).');
+      cmds.push(`set ${k} ${mac}${key ? ' ' + key : ''}`);
+    } else {
+      cmds.push(`clear ${k}`);
+    }
+  }
+  for (let i = 1; i <= 3; i++) {
+    const mac = $('tag' + i + '-mac').value.trim().toLowerCase();
+    const name = ($('tag' + i + '-name').value.trim().replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 10)) || ('TAG' + i);
+    if (mac) {
+      if (!MAC_RE.test(mac)) return alert('Ruuvi tag ' + i + ' address must look like aa:bb:cc:dd:ee:ff');
+      cmds.push(`set tag ${i} ${mac} ${name}`);
+    } else {
+      cmds.push(`clear tag ${i}`);
+    }
+  }
+  $('save').disabled = true;
+  setStatus('Saving…');
+  try {
+    for (const c of cmds) await send(c);
+    await send('reboot');
+    await sleep(3500);
+    await send('show');
+    await send('scan');
+    setStatus('Saved. The display restarted with the new settings.', 'ok');
+  } catch (e) {
+    setStatus('Save failed: ' + e.message, 'err');
+  }
+  $('save').disabled = false;
+}
+
+$('connect').onclick = connect;
+$('save').onclick = save;
+</script>
+</body>
+</html>
