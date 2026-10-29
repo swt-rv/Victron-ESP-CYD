@@ -8,23 +8,6 @@ ESP32 "Cheap Yellow Display" (ESP32-2432S028R, 2.8" ILI9341) showing:
 
 Everything is read over Bluetooth by listening to broadcasts (Victron "Instant Readout" and Ruuvi data format 5). Nothing is paired.
 
-## Publish the one-click install page
-
-1. Create a new **public** GitHub repository (e.g. `camper-dash`) and upload everything in this folder, keeping the structure:
-   ```
-   .github/workflows/build.yml
-   docs/index.html
-   docs/manifest-cyd.json
-   docs/manifest-cyd_inverted.json
-   src/main.cpp
-   platformio.ini
-   .gitignore
-   ```
-   The `.github` folder is hidden on Mac/Linux, so if drag-and-drop skips it, use **Add file > Create new file** on GitHub, type `.github/workflows/build.yml` as the name, and paste the contents.
-2. In the repo go to **Settings > Pages** and set **Source** to **GitHub Actions**.
-3. Open the **Actions** tab. The "Build and publish" run starts on its own (or press *Run workflow*). It takes a few minutes the first time.
-4. When it finishes, your page is at `https://<your-username>.github.io/<repo-name>/`.
-
 Open that link in **Chrome or Edge** on a computer, plug in the display with a USB data cable, and:
 
 1. Click **Install** and pick the serial port.
